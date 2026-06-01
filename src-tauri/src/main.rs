@@ -22,7 +22,7 @@ mod tray;
 
 use config::{AppConfig, ClipboardPriority, ConfigUpdate, FrontendConfig, FrontendPeer};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::Emitter;
 use tokio::sync::RwLock;
 
 /// Global application state shared across all modules.

@@ -15,7 +15,7 @@
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use tokio::sync::mpsc;
 
 /// Information discovered about a peer via mDNS.
@@ -59,9 +59,10 @@ pub fn start_discovery(
     let service_info = ServiceInfo::new(
         service_type,
         &instance_name,
-        "", // host (empty = this machine)
+        "",
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         port,
-        &properties[..],
+        properties,
     )
     .map_err(|e| format!("Failed to create mDNS service info: {e}"))?;
 
@@ -99,20 +100,20 @@ pub fn start_discovery(
                         continue;
                     }
 
-                    let peer_name = info.get_property("name").unwrap_or("unknown").to_string();
+                    let peer_name = info
+                        .get_property("name")
+                        .map(|p| p.val_str().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
 
                     let peer_port = info.get_port();
 
-                    // Get the first IPv4 address
+                    // Get the first IPv4 address, fall back to any address
                     let peer_ip = match info.get_addresses_v4().iter().next() {
-                        Some(addr) => IpAddr::V4(*addr),
-                        None => {
-                            // Try IPv6
-                            match info.get_addresses_v6().iter().next() {
-                                Some(addr) => IpAddr::V6(*addr),
-                                None => continue,
-                            }
-                        }
+                        Some(addr) => IpAddr::V4(**addr),
+                        None => match info.get_addresses().iter().next() {
+                            Some(addr) => *addr,
+                            None => continue,
+                        },
                     };
 
                     let peer = DiscoveredPeer {

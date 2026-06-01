@@ -22,6 +22,7 @@ use chacha20poly1305::aead::{Aead, OsRng};
 use chacha20poly1305::{ChaCha20Poly1305, KeyInit, Nonce};
 use hkdf::Hkdf;
 use rand::Rng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 

@@ -25,7 +25,7 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime,
+    AppHandle, Emitter, Manager, Runtime,
 };
 
 /// Build and register the system tray icon.
@@ -56,12 +56,8 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
         .menu(&menu)
         .tooltip("ClipSync — LAN clipboard sync")
         .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
-            // Fallback: create a minimal 32x32 RGBA icon (purple dot)
-            tauri::Icon::Rgba {
-                rgba: vec![0; 32 * 32 * 4],
-                width: 32,
-                height: 32,
-            }
+            // Fallback: create a minimal 32x32 RGBA icon (transparent)
+            tauri::image::Image::new_owned(vec![0; 32 * 32 * 4], 32, 32)
         }))
         .on_menu_event(move |app_handle, event| match event.id().as_ref() {
             "open_settings" => {

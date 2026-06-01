@@ -25,12 +25,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use tokio::sync::RwLock;
 
 use crate::clipboard::{self, ClipboardContent};
 use crate::config::SharedConfig;
 use crate::discovery::DiscoveredPeer;
-use crate::pairing::{Cipher, WireMessage};
+use crate::pairing::WireMessage;
 use crate::transport::TransportManager;
 
 /// How long to hold the loop guard after applying remote content.
