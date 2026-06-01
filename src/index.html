@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClipSync</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>ClipSync</h1>
+      <span id="status-badge" class="badge disconnected">Disconnected</span>
+    </header>
+
+    <main>
+      <!-- Pairing Section -->
+      <section id="pairing-section">
+        <h2>Pairing</h2>
+        <p>Enter the 6-digit code shown on the other machine.</p>
+        <div class="pairing-controls">
+          <input
+            id="pairing-code"
+            type="text"
+            maxlength="6"
+            placeholder="000000"
+            autocomplete="off"
+          />
+          <button id="btn-pair">Pair</button>
+        </div>
+        <p id="pairing-msg" class="msg"></p>
+      </section>
+
+      <!-- Peers Section -->
+      <section id="peers-section">
+        <h2>Paired Peers</h2>
+        <ul id="peer-list">
+          <li class="empty">No paired peers</li>
+        </ul>
+      </section>
+
+      <!-- Settings Section -->
+      <section id="settings-section">
+        <h2>Settings</h2>
+        <div class="setting">
+          <label for="payload-limit">Max payload size (MB):</label>
+          <input id="payload-limit" type="number" min="1" max="100" value="25" />
+        </div>
+        <div class="setting">
+          <label for="debounce-ms">Debounce (ms):</label>
+          <input id="debounce-ms" type="number" min="50" max="2000" value="200" />
+        </div>
+        <div class="setting">
+          <label for="clipboard-priority">Clipboard priority:</label>
+          <select id="clipboard-priority">
+            <option value="image_first">Image first</option>
+            <option value="text_first">Text first</option>
+            <option value="text_only">Text only</option>
+            <option value="image_only">Image only</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label>
+            <input id="sync-paused" type="checkbox" />
+            Pause sync
+          </label>
+        </div>
+        <button id="btn-save-settings">Save Settings</button>
+        <p id="settings-msg" class="msg"></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>ClipSync v0.1.0 — LAN clipboard sync</p>
+    </footer>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>
