@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/actions-workflow]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
