@@ -17,9 +17,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential pkg-config libssl-dev \
-            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
-            libayatana-appindicator3-dev librsvg2-dev
+            libglib2.0-dev libgtk-3-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
