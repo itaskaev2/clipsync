@@ -89,7 +89,27 @@ async fn main() {
         ))
         .manage(app_state)
         .setup(move |app| {
-            // --- Create system tray (no initial window) ---
+            // --- Create an invisible persistent window (keeps event loop alive) ---
+            // Tauri v2 exits when all windows close — tray alone doesn't prevent exit.
+            // This hidden window is never shown, never appears in taskbar, and never closes.
+            let _hidden = tauri::WebviewWindowBuilder::new(
+                app,
+                "hidden",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("ClipSync")
+            .visible(false)
+            .skip_taskbar(true)
+            .build()?;
+            // Prevent the hidden window from being closed (would exit the app)
+            let hidden_clone = _hidden.clone();
+            _hidden.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    let _ = hidden_clone.hide();
+                }
+            });
+
+            // --- Create system tray ---
             let handle = app.handle().clone();
             tray::setup_tray(&handle)?;
 
