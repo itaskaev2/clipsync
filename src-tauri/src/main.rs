@@ -24,6 +24,9 @@ use config::{AppConfig, ClipboardPriority, ConfigUpdate, FrontendConfig, Fronten
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::RwLock;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 
 /// Global application state shared across all modules.
 struct AppState {
@@ -32,13 +35,35 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
+    // Initialize logging — console (stdout) + rotating file (logs/ dir)
+    let log_dir = directories::ProjectDirs::from("com", "clipsync", "ClipSync")
+        .map(|d| d.data_local_dir().join("logs"))
+        .unwrap_or_else(|| std::path::PathBuf::from("logs"));
+
+    let file_appender = tracing_appender::rolling::hourly(&log_dir, "clipsync.log");
+    let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("debug"));
+
+    // Console layer: human-readable, INFO level
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+
+    // File layer: JSON for structured parsing, DEBUG level
+    let file_layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_writer(file_writer)
+        .with_filter(env_filter);
+
+    tracing_subscriber::registry()
+        .with(console_layer)
+        .with(file_layer)
         .init();
+
+    // Keep the file writer guard alive for the lifetime of the app
+    std::mem::forget(_guard);
 
     tracing::info!("ClipSync v{} starting...", env!("CARGO_PKG_VERSION"));
 
