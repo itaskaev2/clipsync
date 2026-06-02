@@ -56,8 +56,24 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
         .menu(&menu)
         .tooltip("ClipSync — LAN clipboard sync")
         .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
-            // Fallback: create a minimal 32x32 RGBA icon (transparent)
-            tauri::image::Image::new_owned(vec![0; 32 * 32 * 4], 32, 32)
+            // Fallback: visible 32x32 purple icon (so tray appears on Windows)
+            let size = 32;
+            let mut rgba = vec![0u8; size * size * 4];
+            for y in 0..size {
+                for x in 0..size {
+                    let idx = (y * size + x) * 4;
+                    // Purple circle with white clip
+                    let dx = x as f32 - size as f32 / 2.0;
+                    let dy = y as f32 - size as f32 / 2.0;
+                    if dx * dx + dy * dy < (size as f32 / 2.5).powi(2) {
+                        rgba[idx] = 99;   // R
+                        rgba[idx+1] = 102; // G
+                        rgba[idx+2] = 241; // B
+                        rgba[idx+3] = 255; // A
+                    }
+                }
+            }
+            tauri::image::Image::new_owned(rgba, size as u32, size as u32)
         }))
         .on_menu_event(move |app_handle, event| match event.id().as_ref() {
             "open_settings" => {

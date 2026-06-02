@@ -172,17 +172,16 @@ async fn start_background_services(config: Arc<RwLock<AppConfig>>, app: tauri::A
         clipboard::start_watcher(clipboard_tx, debounce, priority, limit).await;
     });
 
-    // --- Start mDNS discovery ---
+    // --- Start mDNS discovery (non-fatal if it fails) ---
     let instance_id2 = instance_id.clone();
     let hostname2 = hostname.clone();
-    let _daemon = match discovery::start_discovery(instance_id2, hostname2, ws_port, discovery_tx) {
-        Ok(d) => {
+    match discovery::start_discovery(instance_id2, hostname2, ws_port, discovery_tx) {
+        Ok(_d) => {
             tracing::info!("mDNS discovery started");
-            Some(d)
         }
         Err(e) => {
-            tracing::error!("Failed to start mDNS discovery: {e}");
-            None
+            tracing::warn!("mDNS discovery unavailable (non-fatal): {e}");
+            tracing::warn!("ClipSync will work without auto-discovery. Use manual pairing.");
         }
     };
 
@@ -210,10 +209,9 @@ async fn start_background_services(config: Arc<RwLock<AppConfig>>, app: tauri::A
         }),
     );
 
-    // Keep the daemon alive
-    if let Some(_d) = _daemon {
-        std::future::pending::<()>().await;
-    }
+    // Keep the background task alive forever
+    tracing::info!("Background services started. Waiting for exit...");
+    std::future::pending::<()>().await;
 }
 
 /// Find an available TCP port.
