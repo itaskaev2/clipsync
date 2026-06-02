@@ -8,26 +8,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  smoke:
+  check:
     runs-on: actions-runner
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check environment
+      - name: Install system dependencies
         run: |
-          echo "User: $(whoami)"
-          echo "OS: $(cat /etc/os-release | head -1)"
-          echo "Disk: $(df -h / | tail -1)"
-          echo "Memory: $(free -m | grep Mem)"
-          echo "Sudo: $(sudo -n echo OK 2>&1 || echo FAIL)"
-
-      - name: Install deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential pkg-config libssl-dev \
-            libglib2.0-dev libgtk-3-dev
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev \
+            libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev
           sudo apt-get clean
-          echo "Disk after install: $(df -h / | tail -1)"
+          # Verify critical packages
+          pkg-config --exists glib-2.0 && echo "glib-2.0 OK" || (echo "glib-2.0 MISSING" && exit 1)
+          pkg-config --exists javascriptcoregtk-4.1 && echo "jscore OK" || (echo "jscore MISSING" && exit 1)
+          echo "Disk: $(df -h / | tail -1)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,9 +34,7 @@ jobs:
           cache: 'npm'
 
       - name: npm ci + build frontend
-        run: |
-          npm ci
-          npm run build:frontend
+        run: npm ci && npm run build:frontend
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -57,15 +53,16 @@ jobs:
 
   release:
     if: github.ref == 'refs/heads/main'
-    needs: smoke
+    needs: check
     runs-on: actions-runner
     steps:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential pkg-config libssl-dev \
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev \
             libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
             libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
             libayatana-appindicator3-dev librsvg2-dev
@@ -77,7 +74,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install npm dependencies
+      - name: npm ci
         run: npm ci
 
       - name: Setup Rust
