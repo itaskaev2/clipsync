@@ -8,17 +8,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
+  smoke:
     runs-on: actions-runner
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Check environment
+        run: |
+          echo "User: $(whoami)"
+          echo "OS: $(cat /etc/os-release | head -1)"
+          echo "Disk: $(df -h / | tail -1)"
+          echo "Memory: $(free -m | grep Mem)"
+          echo "Sudo: $(sudo -n echo OK 2>&1 || echo FAIL)"
+
+      - name: Install deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential pkg-config libssl-dev \
             libglib2.0-dev libgtk-3-dev
           sudo apt-get clean
+          echo "Disk after install: $(df -h / | tail -1)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,11 +35,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build:frontend
+      - name: npm ci + build frontend
+        run: |
+          npm ci
+          npm run build:frontend
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -40,14 +48,16 @@ jobs:
       - name: Cargo check
         run: cargo check
         working-directory: src-tauri
+        timeout-minutes: 10
 
       - name: Cargo test
         run: cargo test
         working-directory: src-tauri
+        timeout-minutes: 5
 
   release:
     if: github.ref == 'refs/heads/main'
-    needs: check
+    needs: smoke
     runs-on: actions-runner
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +87,7 @@ jobs:
 
       - name: Build release
         run: npm run tauri build
+        timeout-minutes: 30
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
