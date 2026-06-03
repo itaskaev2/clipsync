@@ -69,6 +69,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Build frontend
+        # generate_context! embeds ../dist at compile time, so dist/ must exist
+        # before `cargo test` (tauri build re-runs this via beforeBuildCommand).
+        run: npm run build:frontend
+
       - name: Run tests
         run: cargo test
         working-directory: src-tauri
