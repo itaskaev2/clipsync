@@ -45,19 +45,35 @@ struct ClipboardSnapshot {
     hash: String,
 }
 
-/// Start the clipboard watcher. Returns a receiver that yields ClipboardContent
-/// when the local clipboard changes. Runs until the channel is closed.
+/// Start the clipboard watcher. Sends `ClipboardContent` on `tx` when the local
+/// clipboard changes, and a `UserNotification` on `notify_tx` when a payload is
+/// dropped for exceeding the size limit. Runs until `tx` is closed.
 pub async fn start_watcher(
     tx: mpsc::Sender<ClipboardContent>,
-    debounce_ms: u64,
-    priority: ClipboardPriority,
-    payload_limit_bytes: u64,
+    notify_tx: mpsc::Sender<crate::UserNotification>,
+    config: crate::config::SharedConfig,
 ) {
     let mut last_snapshot: Option<ClipboardSnapshot> = None;
+    let mut debounce_ms = config.read().await.debounce_ms.max(20);
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(debounce_ms));
 
     loop {
         interval.tick().await;
+
+        // Read live settings each tick so UI changes take effect immediately.
+        let (priority, payload_limit_bytes, new_debounce) = {
+            let cfg = config.read().await;
+            (
+                cfg.clipboard_priority.clone(),
+                cfg.payload_limit_mb as u64 * 1024 * 1024,
+                cfg.debounce_ms.max(20),
+            )
+        };
+        if new_debounce != debounce_ms {
+            debounce_ms = new_debounce;
+            interval = tokio::time::interval(tokio::time::Duration::from_millis(debounce_ms));
+            continue;
+        }
 
         // Read current clipboard state
         let current = match read_clipboard_snapshot(&priority) {
@@ -95,6 +111,16 @@ pub async fn start_watcher(
                 size,
                 payload_limit_bytes
             );
+            let _ = notify_tx
+                .send(crate::UserNotification {
+                    title: "ClipSync — payload too large".to_string(),
+                    body: format!(
+                        "Skipped a {} MB clipboard item (limit {} MB).",
+                        size / (1024 * 1024),
+                        payload_limit_bytes / (1024 * 1024)
+                    ),
+                })
+                .await;
             last_snapshot = Some(current);
             continue;
         }
@@ -114,6 +140,14 @@ pub async fn start_watcher(
 
         last_snapshot = Some(current);
     }
+}
+
+/// Hash of the clipboard's current content under the given priority, or `None`
+/// if it can't be read. Used by the sync engine to loop-guard the exact bytes
+/// that landed on the clipboard after applying remote content (images may be
+/// re-encoded by the OS on the round-trip).
+pub fn read_current_hash(priority: &ClipboardPriority) -> Option<String> {
+    read_clipboard_snapshot(priority).ok().map(|s| s.hash)
 }
 
 /// Read the current clipboard and return a snapshot.
@@ -271,11 +305,6 @@ fn content_size(content: &ClipboardContent) -> u64 {
     }
     // Add overhead for serialization ~100 bytes
     size + 100
-}
-
-/// Check if two hashes are equal.
-pub fn hashes_equal(a: &str, b: &str) -> bool {
-    a == b
 }
 
 #[cfg(test)]

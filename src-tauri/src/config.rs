@@ -62,8 +62,10 @@ pub struct AppConfig {
     pub paired_peers: Vec<PeerInfo>,
     /// Our unique instance ID.
     pub instance_id: String,
-    /// Pairing code (6-digit, stored while pairing is in progress).
-    #[serde(skip_serializing)]
+    /// Pairing code (6-digit). Persisted so pairing survives restarts — the
+    /// shared encryption key is derived from it. The prompt explicitly requires
+    /// the pairing key to be saved in the app config dir.
+    #[serde(default)]
     pub pairing_code: Option<String>,
 }
 
@@ -118,7 +120,7 @@ pub fn load_config() -> AppConfig {
                         "Failed to parse config at {}: {e}; using defaults.",
                         path.display()
                     );
-                    let mut cfg = AppConfig::default();
+                    let cfg = AppConfig::default();
                     // Try to preserve the old instance_id if it was a UUID
                     // (best-effort; if parsing failed completely, generate new)
                     if let Some(parent) = path.parent() {
@@ -175,6 +177,32 @@ pub fn save_config(config: &AppConfig) {
     }
 }
 
+/// Insert or update a peer in the allowlist (matched by id), then return
+/// whether the list changed. Used when a handshake with a peer succeeds.
+pub fn upsert_peer(config: &mut AppConfig, peer: PeerInfo) -> bool {
+    if let Some(existing) = config.paired_peers.iter_mut().find(|p| p.id == peer.id) {
+        let changed = existing.name != peer.name
+            || existing.address != peer.address
+            || existing.port != peer.port;
+        existing.name = peer.name;
+        existing.address = peer.address;
+        existing.port = peer.port;
+        existing.last_seen = peer.last_seen;
+        changed
+    } else {
+        config.paired_peers.push(peer);
+        true
+    }
+}
+
+/// Current Unix timestamp in seconds (0 if the clock is before the epoch).
+pub fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 /// Serializable subset of config for the frontend (no secrets).
 #[derive(Debug, Clone, Serialize)]
 pub struct FrontendConfig {
@@ -183,6 +211,9 @@ pub struct FrontendConfig {
     pub clipboard_priority: String,
     pub sync_paused: bool,
     pub instance_id: String,
+    /// The active pairing code (shown in the UI so it can be shared). Empty
+    /// string when not yet paired.
+    pub pairing_code: String,
 }
 
 impl From<&AppConfig> for FrontendConfig {
@@ -193,6 +224,7 @@ impl From<&AppConfig> for FrontendConfig {
             clipboard_priority: format!("{:?}", cfg.clipboard_priority).to_lowercase(),
             sync_paused: cfg.sync_paused,
             instance_id: cfg.instance_id.clone(),
+            pairing_code: cfg.pairing_code.clone().unwrap_or_default(),
         }
     }
 }

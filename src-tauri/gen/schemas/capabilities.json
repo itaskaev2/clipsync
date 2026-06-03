@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Core permissions for ClipSync windows (invoke + events + window control).","local":true,"windows":["*"],"permissions":["core:default","core:event:default","core:window:default","core:webview:default","core:app:default"]}}

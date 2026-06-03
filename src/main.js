@@ -6,6 +6,7 @@ let peers = [];
 
 // --- DOM refs ---
 const statusBadge = document.getElementById('status-badge');
+const yourCode = document.getElementById('your-code');
 const pairingCode = document.getElementById('pairing-code');
 const pairingMsg = document.getElementById('pairing-msg');
 const peerList = document.getElementById('peer-list');
@@ -15,18 +16,31 @@ const clipboardPriority = document.getElementById('clipboard-priority');
 const syncPaused = document.getElementById('sync-paused');
 const settingsMsg = document.getElementById('settings-msg');
 
-// --- Pairing ---
+// --- Generate a code on this machine ---
+document.getElementById('btn-generate').addEventListener('click', async () => {
+  try {
+    const code = await invoke('generate_code');
+    yourCode.textContent = code;
+    pairingMsg.textContent = 'Code generated — enter it on the other machine.';
+    pairingMsg.className = 'msg success';
+  } catch (err) {
+    pairingMsg.textContent = `Generate failed: ${err}`;
+    pairingMsg.className = 'msg error';
+  }
+});
+
+// --- Pair with the code from the other machine ---
 document.getElementById('btn-pair').addEventListener('click', async () => {
   const code = pairingCode.value.trim();
-  if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+  if (!/^\d{6}$/.test(code)) {
     pairingMsg.textContent = 'Enter a 6-digit code';
     pairingMsg.className = 'msg error';
     return;
   }
-
   try {
     await invoke('pair_with_code', { code });
-    pairingMsg.textContent = 'Pairing request sent.';
+    yourCode.textContent = code;
+    pairingMsg.textContent = 'Paired. Looking for the peer on this code…';
     pairingMsg.className = 'msg success';
     pairingCode.value = '';
     await loadPeers();
@@ -36,11 +50,12 @@ document.getElementById('btn-pair').addEventListener('click', async () => {
   }
 });
 
-// --- Settings ---
+// --- Save settings ---
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
   try {
+    // NB: the Rust command parameter is named `update`.
     await invoke('update_config', {
-      config: {
+      update: {
         payload_limit_mb: parseInt(payloadLimit.value) || 25,
         debounce_ms: parseInt(debounceMs.value) || 200,
         clipboard_priority: clipboardPriority.value,
@@ -73,13 +88,26 @@ function renderPeers() {
   }
   for (const p of peers) {
     const li = document.createElement('li');
-    li.innerHTML = `
-      <span>${escapeHtml(p.name || p.id)}</span>
-      <span class="peer-status ${p.connected ? 'online' : 'offline'}">
-        ${p.connected ? 'online' : 'offline'}
-      </span>
-    `;
+    const name = document.createElement('span');
+    name.textContent = p.name || p.id;
+    const status = document.createElement('span');
+    status.className = `peer-status ${p.connected ? 'online' : 'offline'}`;
+    status.textContent = p.connected ? 'online' : 'offline';
+    li.append(name, status);
     peerList.appendChild(li);
+  }
+}
+
+function setBadge(paused, peerCount) {
+  if (paused) {
+    statusBadge.textContent = 'Paused';
+    statusBadge.className = 'badge disconnected';
+  } else if (peerCount > 0) {
+    statusBadge.textContent = `Connected (${peerCount})`;
+    statusBadge.className = 'badge connected';
+  } else {
+    statusBadge.textContent = 'Waiting for peer';
+    statusBadge.className = 'badge disconnected';
   }
 }
 
@@ -91,52 +119,30 @@ async function loadConfig() {
     debounceMs.value = config.debounce_ms;
     clipboardPriority.value = config.clipboard_priority;
     syncPaused.checked = config.sync_paused;
-    statusBadge.textContent = config.sync_paused ? 'Paused' : 'Connected';
-    statusBadge.className = config.sync_paused
-      ? 'badge disconnected'
-      : 'badge connected';
+    if (config.pairing_code) yourCode.textContent = config.pairing_code;
+    const connectedCount = peers.filter((p) => p.connected).length;
+    setBadge(config.sync_paused, connectedCount);
   } catch (err) {
     console.error('Failed to load config:', err);
   }
 }
 
-// --- Event listeners from backend ---
-listen('clipsync:peer-joined', (event) => {
-  console.log('Peer joined:', event.payload);
-  loadPeers();
-});
-
-listen('clipsync:peer-left', (event) => {
-  console.log('Peer left:', event.payload);
-  loadPeers();
-});
+// --- Backend events ---
+listen('clipsync:peer-joined', () => loadPeers());
+listen('clipsync:peer-left', () => loadPeers());
 
 listen('clipsync:status-changed', (event) => {
-  const { connected, paused } = event.payload;
-  if (paused) {
-    statusBadge.textContent = 'Paused';
-    statusBadge.className = 'badge disconnected';
-  } else if (connected) {
-    statusBadge.textContent = 'Connected';
-    statusBadge.className = 'badge connected';
-  } else {
-    statusBadge.textContent = 'Disconnected';
-    statusBadge.className = 'badge disconnected';
-  }
+  const { peers: peerCount = 0, paused = false } = event.payload || {};
+  setBadge(paused, peerCount);
 });
 
 listen('clipsync:notification', (event) => {
-  const { title, body } = event.payload;
-  console.log(`[${title}] ${body}`);
+  const { title, body } = event.payload || {};
+  pairingMsg.textContent = `${title}: ${body}`;
+  pairingMsg.className = 'msg';
 });
 
 // --- Init ---
 loadConfig();
 loadPeers();
 setInterval(loadPeers, 5000);
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}

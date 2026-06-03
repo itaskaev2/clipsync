@@ -15,8 +15,34 @@
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 use tokio::sync::mpsc;
+
+/// Best-effort discovery of the primary LAN IPv4 address. Opens a UDP socket
+/// "connected" to a public address — no packets are sent, but the OS picks the
+/// outbound interface, whose local address is our LAN IP.
+fn local_ipv4() -> Option<Ipv4Addr> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?;
+    match sock.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_unspecified() => Some(v4),
+        _ => None,
+    }
+}
+
+/// Reduce an arbitrary hostname to a safe DNS label (alphanumeric + '-').
+fn sanitize_label(name: &str) -> String {
+    let label: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let trimmed = label.trim_matches('-');
+    if trimmed.is_empty() {
+        "clipsync".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
 
 /// Information discovered about a peer via mDNS.
 #[derive(Debug, Clone)]
@@ -51,20 +77,35 @@ pub fn start_discovery(
     // --- Register our own service ---
     let service_type = "_clipsync._tcp.local.";
     let instance_name = format!("{}_{}", hostname, &instance_id[..8]);
+    // Host name must be a valid DNS label ending in `.local.`.
+    let host_name = format!("{}-{}.local.", sanitize_label(&hostname), &instance_id[..8]);
 
     let mut properties = HashMap::new();
     properties.insert("id".to_string(), instance_id.clone());
     properties.insert("name".to_string(), hostname.clone());
 
-    let service_info = ServiceInfo::new(
-        service_type,
-        &instance_name,
-        "",
-        IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        port,
-        properties,
-    )
-    .map_err(|e| format!("Failed to create mDNS service info: {e}"))?;
+    // Advertise the actual LAN IPv4 so peers get a reachable address. If we
+    // can't determine it, fall back to mDNS auto-detecting interface addresses.
+    let service_info = match local_ipv4() {
+        Some(ip) => {
+            tracing::info!("Advertising mDNS address {ip}:{port}");
+            ServiceInfo::new(
+                service_type,
+                &instance_name,
+                &host_name,
+                IpAddr::V4(ip),
+                port,
+                properties,
+            )
+            .map_err(|e| format!("Failed to create mDNS service info: {e}"))?
+        }
+        None => {
+            tracing::warn!("Could not determine LAN IPv4; using mDNS auto-detect.");
+            ServiceInfo::new(service_type, &instance_name, &host_name, "", port, properties)
+                .map_err(|e| format!("Failed to create mDNS service info: {e}"))?
+                .enable_addr_auto()
+        }
+    };
 
     daemon
         .register(service_info)
@@ -90,8 +131,10 @@ pub fn start_discovery(
             let event = browser.recv_async().await;
             match event {
                 Ok(ServiceEvent::ServiceResolved(info)) => {
+                    // NB: use val_str() (the value), not to_string() which
+                    // yields "id=<value>" and would break the self-skip below.
                     let peer_id = match info.get_property("id") {
-                        Some(id) => id.to_string(),
+                        Some(id) => id.val_str().to_string(),
                         None => continue,
                     };
 
@@ -138,7 +181,7 @@ pub fn start_discovery(
                         break;
                     }
                 }
-                Ok(ServiceEvent::ServiceRemoved(service_type, instance_name)) => {
+                Ok(ServiceEvent::ServiceRemoved(_service_type, instance_name)) => {
                     // Extract peer_id from the instance name (format: hostname_UUIDPREFIX)
                     // Find and remove from known_peers
                     let removed: Vec<String> = known_peers
