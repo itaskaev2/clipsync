@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local debug log dumps (machine-specific captures, not for the repo)
+/src-tauri/*Machine.txt

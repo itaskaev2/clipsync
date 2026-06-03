@@ -2,12 +2,27 @@
 
 All notable changes to ClipSync.
 
-## [Unreleased] — MVP alignment
+## [Unreleased]
+
+## [0.1.2] - 2026-06-03 — MVP alignment
 
 End-to-end sync was previously non-functional; these changes make the Phase 0
 acceptance criteria actually pass.
 
 ### Fixed
+- **Connect/disconnect storm eliminated.** Both peers discovered each other and
+  both dialed out, so two connections (inbound + outbound) formed per pair and
+  fought over the peer map — each new one displaced the other and each death
+  evicted the survivor, flapping many times per second. Now a deterministic
+  tie-break (only the peer whose instance id sorts first dials; the other
+  accepts) yields a single stable connection, and a per-connection token keeps a
+  dying connection from evicting a newer one.
+- **Clipboard payloads now deserialize.** `ClipboardContent` used
+  `skip_serializing_if` on its optional `text`/`image_data`, but the MessagePack
+  wire format encodes a struct as a positional array — skipping a `None` field
+  shortened it to 3 elements, so the receiver always failed with "invalid length
+  3, expected 4" and *no* clipboard item ever applied. All four fields are now
+  always serialized (`None` → nil); added round-trip regression tests.
 - **Pairing now connects.** The allowlist was never populated, so the
   discovery→connect path was dead and no peer ever connected. Connections are
   now gated by the shared key (derived from the pairing code); peers are added
@@ -53,5 +68,6 @@ acceptance criteria actually pass.
 - Self-hosted CI on Kubernetes (Linux) + GitHub Windows release builds
 - GitHub Releases with auto-generated notes
 
+[0.1.2]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.2
 [0.1.1]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.1
 [0.1.0]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.0
