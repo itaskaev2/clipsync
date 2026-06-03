@@ -35,6 +35,7 @@ use crate::pairing::{Cipher, WireMessage};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
@@ -44,11 +45,18 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 type Peers = Arc<RwLock<HashMap<String, PeerHandle>>>;
 type CipherSlot = Arc<RwLock<Option<Arc<Cipher>>>>;
 
+/// Monotonic per-connection token. A connection only removes its *own* entry
+/// from the peer map on teardown (token match), so a reconnect that installs a
+/// newer connection under the same peer id is never evicted by the old one.
+static CONN_SEQ: AtomicU64 = AtomicU64::new(0);
+
 /// A connected peer handle — can send messages to this peer.
 #[derive(Clone)]
 pub struct PeerHandle {
     pub peer_id: String,
     tx: mpsc::Sender<WireMessage>,
+    /// Identifies which physical connection currently owns the map entry.
+    token: u64,
 }
 
 impl PeerHandle {
@@ -176,6 +184,17 @@ impl TransportManager {
     /// calls for the same peer are no-ops. The loop waits until a cipher is
     /// available (i.e. until the user pairs), then connects and auto-reconnects.
     pub async fn connect_to_peer(&self, peer_id: String, addr: SocketAddr) {
+        // Deterministic tie-break: only the peer whose instance id sorts first
+        // dials out; the other waits to accept. Both peers evaluate the same
+        // comparison (operands swapped), so exactly one TCP connection is ever
+        // established between a pair. Without this, both sides dial and the two
+        // connections (inbound + outbound) evict each other from the peer map,
+        // producing a connect/disconnect storm.
+        if self.instance_id >= peer_id {
+            tracing::debug!("Awaiting inbound connection from {peer_id} (it dials us).");
+            return;
+        }
+
         {
             let mut connecting = self.connecting.write().await;
             if !connecting.insert(peer_id.clone()) {
@@ -262,6 +281,7 @@ async fn run_connection<S>(
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    let conn_token = CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let (mut ws_write, mut ws_read) = ws.split();
     let (peer_tx, mut peer_rx) = mpsc::channel::<WireMessage>(64);
 
@@ -270,6 +290,7 @@ async fn run_connection<S>(
         PeerHandle {
             peer_id: peer_id.clone(),
             tx: peer_tx,
+            token: conn_token,
         },
     );
     let _ = event_tx
@@ -330,12 +351,26 @@ async fn run_connection<S>(
     }
 
     write_task.abort();
-    peers.write().await.remove(&peer_id);
-    let _ = event_tx
-        .send(TransportEvent::Disconnected {
-            peer_id: peer_id.clone(),
-        })
-        .await;
+    // Only tear down the shared peer entry if it is still *ours*. A reconnect
+    // may have installed a newer connection under the same id during an overlap;
+    // in that case we must not evict it or emit a spurious disconnect.
+    let still_ours = {
+        let mut map = peers.write().await;
+        match map.get(&peer_id) {
+            Some(h) if h.token == conn_token => {
+                map.remove(&peer_id);
+                true
+            }
+            _ => false,
+        }
+    };
+    if still_ours {
+        let _ = event_tx
+            .send(TransportEvent::Disconnected {
+                peer_id: peer_id.clone(),
+            })
+            .await;
+    }
 }
 
 /// Handle an incoming WebSocket connection (server side): upgrade, exchange

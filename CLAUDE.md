@@ -89,9 +89,14 @@ The `build.mjs` script copies `src/{index.html,main.js,style.css}` to `dist/`.
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` — Linux self-hosted: `cargo check` + `cargo test`
-- `.github/workflows/build.yml` — Windows: builds the NSIS installer, uploads it as the `clipsync-windows-installers` artifact
-- (No release workflow currently — it was disabled.)
+- `.github/workflows/ci.yml` — Linux self-hosted: `cargo check` + `cargo test` on PRs to `main` and pushes to `main`.
+- `.github/workflows/build.yml` — Windows: builds the full Tauri bundle (NSIS + MSI), uploads it as the `clipsync-windows-installers` artifact. Runs on PRs and pushes to `main`.
+- `.github/workflows/release.yml` — **version-driven release**. On every push to `main` it reads `version` from `tauri.conf.json`; if no `v<version>` git tag exists yet, it builds the Windows installer, creates the tag at that commit, and publishes a GitHub Release whose notes are the matching `## [<version>]` section of `CHANGELOG.md`. A push that doesn't bump the version is a no-op.
+
+### Cutting a release
+
+1. In a PR: bump `version` in `src-tauri/tauri.conf.json`, `package.json`, and `src-tauri/Cargo.toml` (keep them in sync), and add a `## [<version>] - <date>` section to `CHANGELOG.md`.
+2. Merge the PR to `main`. `release.yml` tags `v<version>` and publishes the release with the installer attached — no manual tag push needed.
 
 ## Local build toolchain (Windows)
 

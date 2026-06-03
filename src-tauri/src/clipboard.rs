@@ -23,15 +23,20 @@ use tokio::sync::mpsc;
 use crate::config::ClipboardPriority;
 
 /// Represents clipboard content ready for sync.
+///
+/// NB: the optional fields must NOT use `skip_serializing_if`. The wire format
+/// is MessagePack via `rmp_serde::to_vec`, which encodes a struct as a
+/// positional array. Skipping a `None` field shortens that array, so the
+/// decoder (which expects a fixed 4-element array) fails with
+/// "invalid length N, expected struct ClipboardContent with 4 elements".
+/// Always serialize all four fields; `None` is encoded as nil.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardContent {
     /// Content type: "text" or "image".
     pub content_type: String,
     /// Text content (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     /// Raw image data: [4-byte width BE][4-byte height BE][RGBA pixels...]
-    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(with = "serde_bytes")]
     pub image_data: Option<Vec<u8>>,
     /// SHA-256 hash of the content (for dedup/loop guard).
@@ -340,5 +345,41 @@ mod tests {
             content_hash: "abc".into(),
         };
         assert!(content_size(&content) > 5);
+    }
+
+    /// Regression test: with `skip_serializing_if`, a text-only payload (image
+    /// `None`) serialized to a 3-element array via `rmp_serde::to_vec` and could
+    /// not be decoded ("invalid length 3, expected 4"), so clipboard sync never
+    /// worked. Round-trip both shapes to prove the wire format is stable.
+    #[test]
+    fn test_rmp_roundtrip_text_only() {
+        let content = ClipboardContent {
+            content_type: "text".into(),
+            text: Some("hello world".into()),
+            image_data: None,
+            content_hash: "deadbeef".into(),
+        };
+        let bytes = rmp_serde::to_vec(&content).expect("serialize");
+        let back: ClipboardContent = rmp_serde::from_slice(&bytes).expect("deserialize");
+        assert_eq!(back.content_type, "text");
+        assert_eq!(back.text.as_deref(), Some("hello world"));
+        assert!(back.image_data.is_none());
+        assert_eq!(back.content_hash, "deadbeef");
+    }
+
+    #[test]
+    fn test_rmp_roundtrip_image_only() {
+        let content = ClipboardContent {
+            content_type: "image".into(),
+            text: None,
+            image_data: Some(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            content_hash: "cafebabe".into(),
+        };
+        let bytes = rmp_serde::to_vec(&content).expect("serialize");
+        let back: ClipboardContent = rmp_serde::from_slice(&bytes).expect("deserialize");
+        assert_eq!(back.content_type, "image");
+        assert!(back.text.is_none());
+        assert_eq!(back.image_data.as_deref(), Some(&[0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9][..]));
+        assert_eq!(back.content_hash, "cafebabe");
     }
 }

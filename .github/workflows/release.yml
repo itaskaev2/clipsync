@@ -1,0 +1,107 @@
+name: release
+
+# Version-driven release. On every push to main we read the version from
+# tauri.conf.json; if no matching `v<version>` tag exists yet, we build the
+# Windows installer, create the tag at this commit, and publish a GitHub
+# Release whose notes come from the matching CHANGELOG.md section.
+#
+# Flow: bump the version + finalize CHANGELOG in a PR → merge to main → this
+# workflow tags and publishes automatically. Pushes that don't change the
+# version are a cheap no-op (the build job is skipped).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the full tag history to detect existing tags
+
+      - id: check
+        shell: bash
+        run: |
+          version=$(grep -m1 '"version"' src-tauri/tauri.conf.json \
+            | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v$version already exists — nothing to release."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Version v$version is new — will build and publish."
+          fi
+
+  release:
+    name: Build & publish (Windows)
+    needs: check-version
+    if: needs.check-version.outputs.release == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: cargo test
+        working-directory: src-tauri
+
+      - name: Build Tauri bundle
+        run: npm run tauri build
+
+      - name: Extract changelog section
+        id: notes
+        shell: bash
+        run: |
+          version="${{ needs.check-version.outputs.version }}"
+          # Print everything between the "## [<version>]" heading and the next
+          # "## [" heading — i.e. just this release's section. Use literal
+          # index() matches (not regex) so the [] brackets need no escaping,
+          # which behaves inconsistently across awk variants.
+          awk -v hdr="## [$version]" '
+            index($0, hdr) == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release v$version. See CHANGELOG.md for details." > RELEASE_NOTES.md
+          fi
+          echo "----- release notes -----"
+          cat RELEASE_NOTES.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: ClipSync v${{ needs.check-version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
