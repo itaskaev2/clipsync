@@ -17,13 +17,23 @@
       <!-- Pairing Section -->
       <section id="pairing-section">
         <h2>Pairing</h2>
-        <p>Enter the 6-digit code shown on the other machine.</p>
+        <p class="hint">
+          On one machine click <strong>Generate</strong> and read the code. On
+          the other, type that code and click <strong>Pair</strong>. Both
+          machines must end up on the same code.
+        </p>
+        <div class="your-code">
+          <span class="your-code-label">Your code</span>
+          <span id="your-code" class="code-value">––––––</span>
+          <button id="btn-generate">Generate</button>
+        </div>
         <div class="pairing-controls">
           <input
             id="pairing-code"
             type="text"
             maxlength="6"
-            placeholder="000000"
+            inputmode="numeric"
+            placeholder="peer code"
             autocomplete="off"
           />
           <button id="btn-pair">Pair</button>

@@ -26,8 +26,6 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-use crate::config::PeerInfo;
-
 /// Size of the ChaCha20-Poly1305 key (256 bits).
 const KEY_SIZE: usize = 32;
 /// Size of the ChaCha20-Poly1305 nonce (96 bits).
@@ -137,21 +135,6 @@ impl WireMessage {
 /// Verify a pairing code format (6 digits).
 pub fn is_valid_pairing_code(code: &str) -> bool {
     code.len() == 6 && code.chars().all(|c| c.is_ascii_digit())
-}
-
-/// Check if a peer is in the allowlist.
-pub fn is_peer_allowed(peers: &[PeerInfo], peer_id: &str) -> bool {
-    peers.iter().any(|p| p.id == peer_id)
-}
-
-/// Find a peer by ID (mutable reference helper).
-pub fn find_peer_mut<'a>(peers: &'a mut [PeerInfo], peer_id: &str) -> Option<&'a mut PeerInfo> {
-    peers.iter_mut().find(|p| p.id == peer_id)
-}
-
-/// Find a peer by ID.
-pub fn find_peer<'a>(peers: &'a [PeerInfo], peer_id: &str) -> Option<&'a PeerInfo> {
-    peers.iter().find(|p| p.id == peer_id)
 }
 
 #[cfg(test)]
