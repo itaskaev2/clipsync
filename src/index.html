@@ -9,7 +9,10 @@
 <body>
   <div id="app">
     <header>
-      <h1>ClipSync</h1>
+      <div class="title-group">
+        <h1>ClipSync</h1>
+        <span id="app-version" class="version-tag" title="Running build — both machines must match">v…</span>
+      </div>
       <span id="status-badge" class="badge disconnected">Disconnected</span>
     </header>
 
@@ -81,7 +84,7 @@
     </main>
 
     <footer>
-      <p>ClipSync v0.1.0 — LAN clipboard sync</p>
+      <p>ClipSync <span id="footer-version">v…</span> — LAN clipboard sync · this device <code id="instance-id">…</code></p>
     </footer>
   </div>
 
