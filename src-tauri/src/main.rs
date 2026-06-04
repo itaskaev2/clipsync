@@ -128,6 +128,7 @@ fn main() {
             pair_with_code,
             generate_code,
             get_status,
+            get_version,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch ClipSync");
@@ -388,6 +389,13 @@ async fn generate_code(state: tauri::State<'_, AppState>) -> Result<String, Stri
     state.transport.set_pairing_code(&code).await;
     tracing::info!("Generated new pairing code.");
     Ok(code)
+}
+
+/// App version string, baked in at build time from Cargo.toml. Lets the UI
+/// show exactly which build is running (both peers must match).
+#[tauri::command]
+fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 /// Current sync status.

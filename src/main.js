@@ -15,6 +15,9 @@ const debounceMs = document.getElementById('debounce-ms');
 const clipboardPriority = document.getElementById('clipboard-priority');
 const syncPaused = document.getElementById('sync-paused');
 const settingsMsg = document.getElementById('settings-msg');
+const appVersion = document.getElementById('app-version');
+const footerVersion = document.getElementById('footer-version');
+const instanceId = document.getElementById('instance-id');
 
 // --- Generate a code on this machine ---
 document.getElementById('btn-generate').addEventListener('click', async () => {
@@ -127,6 +130,28 @@ async function loadConfig() {
   }
 }
 
+// --- Build version + device identity (to verify both machines match) ---
+async function loadVersion() {
+  try {
+    const v = await invoke('get_version');
+    appVersion.textContent = `v${v}`;
+    footerVersion.textContent = `v${v}`;
+  } catch (err) {
+    console.error('Failed to load version:', err);
+  }
+}
+
+async function loadIdentity() {
+  try {
+    const status = await invoke('get_status');
+    if (status && status.instance_id) {
+      instanceId.textContent = String(status.instance_id).slice(0, 8);
+    }
+  } catch (err) {
+    console.error('Failed to load status:', err);
+  }
+}
+
 // --- Backend events ---
 listen('clipsync:peer-joined', () => loadPeers());
 listen('clipsync:peer-left', () => loadPeers());
@@ -143,6 +168,8 @@ listen('clipsync:notification', (event) => {
 });
 
 // --- Init ---
+loadVersion();
+loadIdentity();
 loadConfig();
 loadPeers();
 setInterval(loadPeers, 5000);

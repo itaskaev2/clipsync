@@ -4,6 +4,15 @@ All notable changes to ClipSync.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-04
+
+### Added
+- The window now shows the running **build version** (a chip next to the title
+  and in the footer) plus the short device ID. This makes it easy to confirm
+  both machines are on the same build — a version skew is the usual cause of the
+  connect/disconnect loop, since the connection tie-break only works when both
+  peers run it.
+
 ## [0.1.2] - 2026-06-03 — MVP alignment
 
 End-to-end sync was previously non-functional; these changes make the Phase 0
@@ -68,6 +77,7 @@ acceptance criteria actually pass.
 - Self-hosted CI on Kubernetes (Linux) + GitHub Windows release builds
 - GitHub Releases with auto-generated notes
 
+[0.1.3]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.3
 [0.1.2]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.2
 [0.1.1]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.1
 [0.1.0]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.0
