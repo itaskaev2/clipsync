@@ -50,6 +50,19 @@ type CipherSlot = Arc<RwLock<Option<Arc<Cipher>>>>;
 /// newer connection under the same peer id is never evicted by the old one.
 static CONN_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// WebSocket size limits. Clipboard images are raw RGBA and easily exceed
+/// tungstenite's 16 MiB default frame size (a 2048x2048 image is ~16.8 MiB),
+/// which would otherwise be rejected — the frame is dropped and the connection
+/// resets, so images silently fail to sync. Cap well above the maximum
+/// configurable payload (100 MB).
+fn ws_config() -> tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+    let limit = 128 * 1024 * 1024; // 128 MiB
+    let mut cfg = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default();
+    cfg.max_message_size = Some(limit);
+    cfg.max_frame_size = Some(limit);
+    cfg
+}
+
 /// A connected peer handle — can send messages to this peer.
 #[derive(Clone)]
 pub struct PeerHandle {
@@ -392,7 +405,7 @@ async fn handle_incoming_connection(
         None => return Err("not paired (no cipher); rejecting".to_string()),
     };
 
-    let mut ws = tokio_tungstenite::accept_async(stream)
+    let mut ws = tokio_tungstenite::accept_async_with_config(stream, Some(ws_config()))
         .await
         .map_err(|e| format!("WebSocket upgrade error: {e}"))?;
 
@@ -440,7 +453,7 @@ async fn connect_and_handshake(
 ) -> Result<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>, String>
 {
     let url = format!("ws://{addr}");
-    let (mut ws, _resp) = tokio_tungstenite::connect_async(&url)
+    let (mut ws, _resp) = tokio_tungstenite::connect_async_with_config(&url, Some(ws_config()), false)
         .await
         .map_err(|e| format!("WebSocket connect error: {e}"))?;
 

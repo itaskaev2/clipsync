@@ -48,7 +48,15 @@ pub struct PeerInfo {
 }
 
 /// Main application configuration.
+///
+/// `#[serde(default)]` (container level) is critical: the `toml` crate omits an
+/// empty array-of-tables, so a config with no paired peers is saved WITHOUT a
+/// `paired_peers` key. Without this, the next load fails ("missing field
+/// `paired_peers`"), the config resets to defaults, and the instance id +
+/// pairing code are wiped on every restart. Tolerating missing fields also
+/// keeps old configs forward-compatible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     /// Maximum payload size in megabytes (default 25).
     pub payload_limit_mb: u32,
@@ -65,7 +73,6 @@ pub struct AppConfig {
     /// Pairing code (6-digit). Persisted so pairing survives restarts — the
     /// shared encryption key is derived from it. The prompt explicitly requires
     /// the pairing key to be saved in the app config dir.
-    #[serde(default)]
     pub pairing_code: Option<String>,
 }
 
@@ -256,5 +263,34 @@ mod tests {
         assert_eq!(cfg.payload_limit_mb, 25);
         assert_eq!(cfg.debounce_ms, 200);
         assert!(!cfg.instance_id.is_empty());
+    }
+
+    /// Regression: a config file with no `paired_peers` key (seen in the wild,
+    /// written by an older build) must still load. Before `#[serde(default)]`
+    /// this errored with "missing field `paired_peers`", reset the config to
+    /// defaults, and regenerated the instance ID + pairing code on every
+    /// restart — so the app could never stay paired.
+    #[test]
+    fn config_with_missing_fields_still_parses() {
+        // Only the fields an old/partial config might contain — no paired_peers.
+        let toml_str = "\
+payload_limit_mb = 25
+debounce_ms = 200
+clipboard_priority = \"image_first\"
+sync_paused = false
+instance_id = \"abc-123\"
+pairing_code = \"654321\"
+";
+        let loaded: AppConfig =
+            toml::from_str(toml_str).expect("must parse even without paired_peers");
+        assert_eq!(loaded.instance_id, "abc-123");
+        assert_eq!(loaded.pairing_code.as_deref(), Some("654321"));
+        assert!(loaded.paired_peers.is_empty());
+
+        // And a near-empty config falls back entirely to defaults.
+        let minimal: AppConfig = toml::from_str("sync_paused = true").expect("minimal parses");
+        assert!(minimal.sync_paused);
+        assert_eq!(minimal.payload_limit_mb, 25);
+        assert!(!minimal.instance_id.is_empty());
     }
 }

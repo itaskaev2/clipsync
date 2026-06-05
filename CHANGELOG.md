@@ -4,6 +4,22 @@ All notable changes to ClipSync.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-05
+
+### Fixed
+- **Pairing now survives restarts.** When there were no paired peers, the `toml`
+  crate omitted the `paired_peers` array entirely, so the next launch failed to
+  parse the config (`missing field paired_peers`), reset to defaults, and
+  regenerated the instance ID + pairing code on every start — the app could
+  never stay paired. `AppConfig` now tolerates missing fields
+  (`#[serde(default)]`), so identity and pairing persist. The churning instance
+  IDs this caused were also routing clipboard data to stale peer connections.
+- **Images can now transit.** WebSocket frame/message size limits were the
+  tungstenite defaults (16 MiB/frame). Raw RGBA clipboard images easily exceed
+  that (a 2048×2048 image is ~16.8 MiB), so the frame was rejected and the
+  connection reset — images silently failed while small text payloads worked.
+  Limits are now 128 MiB, comfortably above the maximum configurable payload.
+
 ## [0.1.3] - 2026-06-04
 
 ### Added
@@ -77,6 +93,7 @@ acceptance criteria actually pass.
 - Self-hosted CI on Kubernetes (Linux) + GitHub Windows release builds
 - GitHub Releases with auto-generated notes
 
+[0.1.4]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.4
 [0.1.3]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.3
 [0.1.2]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.2
 [0.1.1]: https://github.com/itaskaev-hbs/clipsync/releases/tag/v0.1.1
