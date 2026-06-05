@@ -1,0 +1,43 @@
+[package]
+name = "clipsync"
+version = "0.1.4"
+edition = "2021"
+description = "LAN clipboard synchronization — copy on one machine, paste on another."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_bytes = "0.11"
+rmp-serde = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+tokio-util = "0.7"
+sha2 = "0.10"
+hex = "0.4"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+rand = "0.8"
+mdns-sd = "0.11"
+arboard = "3"
+directories = "5"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+thiserror = "2"
+url = "2"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+hostname = "0.4"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

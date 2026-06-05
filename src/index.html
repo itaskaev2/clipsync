@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClipSync</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title-group">
+        <h1>ClipSync</h1>
+        <span id="app-version" class="version-tag" title="Running build — both machines must match">v…</span>
+      </div>
+      <span id="status-badge" class="badge disconnected">Disconnected</span>
+    </header>
+
+    <main>
+      <!-- Pairing Section -->
+      <section id="pairing-section">
+        <h2>Pairing</h2>
+        <p class="hint">
+          On one machine click <strong>Generate</strong> and read the code. On
+          the other, type that code and click <strong>Pair</strong>. Both
+          machines must end up on the same code.
+        </p>
+        <div class="your-code">
+          <span class="your-code-label">Your code</span>
+          <span id="your-code" class="code-value">––––––</span>
+          <button id="btn-generate">Generate</button>
+        </div>
+        <div class="pairing-controls">
+          <input
+            id="pairing-code"
+            type="text"
+            maxlength="6"
+            inputmode="numeric"
+            placeholder="peer code"
+            autocomplete="off"
+          />
+          <button id="btn-pair">Pair</button>
+        </div>
+        <p id="pairing-msg" class="msg"></p>
+      </section>
+
+      <!-- Peers Section -->
+      <section id="peers-section">
+        <h2>Paired Peers</h2>
+        <ul id="peer-list">
+          <li class="empty">No paired peers</li>
+        </ul>
+      </section>
+
+      <!-- Settings Section -->
+      <section id="settings-section">
+        <h2>Settings</h2>
+        <div class="setting">
+          <label for="payload-limit">Max payload size (MB):</label>
+          <input id="payload-limit" type="number" min="1" max="100" value="25" />
+        </div>
+        <div class="setting">
+          <label for="debounce-ms">Debounce (ms):</label>
+          <input id="debounce-ms" type="number" min="50" max="2000" value="200" />
+        </div>
+        <div class="setting">
+          <label for="clipboard-priority">Clipboard priority:</label>
+          <select id="clipboard-priority">
+            <option value="image_first">Image first</option>
+            <option value="text_first">Text first</option>
+            <option value="text_only">Text only</option>
+            <option value="image_only">Image only</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label>
+            <input id="sync-paused" type="checkbox" />
+            Pause sync
+          </label>
+        </div>
+        <button id="btn-save-settings">Save Settings</button>
+        <p id="settings-msg" class="msg"></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>ClipSync <span id="footer-version">v…</span> — LAN clipboard sync · this device <code id="instance-id">…</code></p>
+    </footer>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>
