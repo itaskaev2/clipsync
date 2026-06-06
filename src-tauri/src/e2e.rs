@@ -119,7 +119,11 @@ async fn round_trip(server: &mut TestPeer, client: &TestPeer, content: &Clipboar
         .await
         .expect("send to peer");
 
-    let (from, msg) = tokio::time::timeout(Duration::from_secs(15), server.incoming_rx.recv())
+    // 30 s, not 15: `cargo test` is a debug build (unoptimized ChaCha20), so a
+    // ~16 MiB image round-trip takes several seconds here and could be 2-3x
+    // slower on a loaded CI runner. Text completes in ms, so the larger cap is
+    // only an upper bound and never slows the suite in practice.
+    let (from, msg) = tokio::time::timeout(Duration::from_secs(30), server.incoming_rx.recv())
         .await
         .expect("message arrives before timeout")
         .expect("incoming channel still open");
