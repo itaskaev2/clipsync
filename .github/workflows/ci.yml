@@ -12,7 +12,9 @@ env:
 jobs:
   check:
     name: Test (Linux)
-    runs-on: actions-runner
+    # TEMPORARY: switched from self-hosted `actions-runner` to a GitHub-hosted
+    # runner. Revert to `actions-runner` to go back to the self-hosted runner.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
