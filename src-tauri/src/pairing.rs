@@ -106,7 +106,16 @@ impl Cipher {
 pub struct WireMessage {
     /// Message type discriminator.
     pub msg_type: String,
-    /// Serialized payload (ClipboardContent JSON, or other).
+    /// Serialized payload (e.g. a MessagePack `ClipboardContent`, or a peer id).
+    ///
+    /// `serde_bytes` is REQUIRED: without it, `rmp_serde` encodes this `Vec<u8>`
+    /// as a MessagePack *array of integers* — one serialize/deserialize call per
+    /// byte plus ~2 bytes on the wire for every byte ≥ 128. For a multi-MB image
+    /// that is millions of element ops and roughly doubles the payload, which
+    /// throttled image sync to ~1 MiB/s (a 16 MiB image took ~15 s and looked
+    /// like it hung). With `serde_bytes` the payload is a single length-prefixed
+    /// binary blob — effectively a memcpy.
+    #[serde(with = "serde_bytes")]
     pub payload: Vec<u8>,
 }
 
@@ -205,6 +214,29 @@ mod tests {
         let decrypted = WireMessage::from_encrypted(&encrypted, &cipher).unwrap();
         assert_eq!(decrypted.msg_type, "clipboard");
         assert_eq!(decrypted.payload, b"payload data");
+    }
+
+    /// Regression: `WireMessage.payload` must serialize as a MessagePack binary
+    /// blob (via `serde_bytes`), NOT an array of integers. Without `serde_bytes`,
+    /// rmp_serde encodes each byte individually — ~2 wire bytes for every byte
+    /// >= 128 plus millions of per-element ops — which roughly doubled image
+    /// payloads and throttled image sync (~4x slower in release). A high-byte
+    /// payload must serialize to about its own length, not ~2x.
+    #[test]
+    fn test_wire_message_payload_is_binary_blob() {
+        let payload = vec![0xFFu8; 64 * 1024]; // all bytes >= 128: worst case for arrays
+        let msg = WireMessage::new("clipboard", payload.clone());
+        let encoded = rmp_serde::to_vec(&msg).expect("serialize");
+        assert!(
+            encoded.len() < payload.len() + 1024,
+            "payload not encoded as a compact blob: {} bytes for {} payload bytes \
+             (missing #[serde(with = \"serde_bytes\")]?)",
+            encoded.len(),
+            payload.len()
+        );
+        let back: WireMessage = rmp_serde::from_slice(&encoded).expect("deserialize");
+        assert_eq!(back.msg_type, "clipboard");
+        assert_eq!(back.payload, payload);
     }
 
     #[test]
