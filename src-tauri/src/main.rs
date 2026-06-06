@@ -23,6 +23,10 @@ mod sync;
 mod transport;
 mod tray;
 
+// End-to-end transport/sync tests (loopback). Compiled only under `cargo test`.
+#[cfg(test)]
+mod e2e;
+
 use config::{ClipboardPriority, ConfigUpdate, FrontendConfig, FrontendPeer, SharedConfig};
 use pairing::WireMessage;
 use std::collections::HashSet;

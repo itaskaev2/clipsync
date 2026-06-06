@@ -4,6 +4,23 @@ All notable changes to ClipSync.
 
 ## [Unreleased]
 
+### Fixed
+- **Image payloads no longer bloat the wire.** `WireMessage.payload` was a plain
+  `Vec<u8>`, which `rmp_serde` encodes as a MessagePack *array of integers* — one
+  element op per byte and ~2 wire bytes for every byte ≥ 128. That roughly
+  doubled every image payload and made encode/decode ~4× slower (release: a
+  32 MiB image round-trip went from ~0.44 s to ~0.10 s; ~8× in debug). Tagging
+  it `#[serde(with = "serde_bytes")]` sends it as a single length-prefixed
+  binary blob. NB: this changes the wire format, so both peers must run a build
+  that includes it.
+
+### Added
+- **End-to-end transport tests** (`src-tauri/src/e2e.rs`): a text round-trip, a
+  >16 MiB image regression (proves large images transit the encrypted socket),
+  and a wrong-pairing-code "never connects" security check — all driving the
+  real WebSocket stack over loopback. Plus a `serde_bytes` encoding regression
+  test in `pairing.rs`.
+
 ## [0.1.4] - 2026-06-05
 
 ### Fixed
